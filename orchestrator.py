@@ -10,12 +10,13 @@ events, not by hardcoding a call chain.
 """
 
 import uuid
+from datetime import date
 
 from models.schemas import (
     Profile, Goal, Task, Blueprint, ExecutionContract, DisruptionLog,
     DisruptionDirection, GoalCategory, AbsorptionOutcome, RecalibrationProposal,
     RecoveryStep, DisruptionCostEstimate, WeeklyPerformance, AetherTipOutput,
-    AetherChatOutput, DailyCheckIn,
+    DailyCheckIn,
 )
 from core.shared_state import SharedExecutionState
 from core.event_bus import (
@@ -36,7 +37,6 @@ from agents.blueprint_agent import run_blueprint
 from agents.nudge_agent import run_nudge, run_gain_suggestions
 from agents.recalibration_agent import run_cost_estimation, run_hierarchy_decision
 from agents.aether_presence_agent import run_aether_tip
-from agents.aether_chat_agent import run_aether_chat
 from config import DISRUPTION_HISTORY_CONTEXT_LIMIT
 
 
@@ -49,8 +49,32 @@ class DoneHoOrchestrator:
         self.day_output_engine = DayOutputEngine()
         self.recovery_applier = RecoveryApplier()
         self._last_nudge_output = None
-        self._chat_history: list[dict] = []
         self._register_subscriptions()
+
+    def check_calendar_rollover(self) -> None:
+        """
+        Real calendar-based week tracking. Called on every request (see
+        api.py's get_orchestrator), not just when something happens to
+        reload a page. Unlike the old design -- where a new week only
+        started if the frontend explicitly called /week/start, which it
+        never actually did -- this checks the real current date and
+        triggers start_new_week() automatically once 7 real days have
+        passed since the week began.
+        """
+        today = date.today().isoformat()
+
+        if self.state.week_start_date is None:
+            # First time this session is seen -- day 1 of week 1 starts now.
+            self.state.week_start_date = today
+            return
+
+        days_elapsed = (
+            date.fromisoformat(today) - date.fromisoformat(self.state.week_start_date)
+        ).days
+
+        if days_elapsed >= 7:
+            self.start_new_week()
+            self.state.week_start_date = today
 
     def start_new_week(self) -> None:
         """
@@ -266,31 +290,6 @@ class DoneHoOrchestrator:
             location=self.state.profile.location,
         )
 
-    def chat_with_aether(self, user_message: str) -> AetherChatOutput:
-        """Reactive counterpart to request_aether_tip() -- answers a
-        free-form message from the frontend's Aether chat panel, grounded
-        in this session's real state. Keeps a short rolling history
-        (this orchestrator instance's own attribute, not part of
-        SharedExecutionState -- it's UI conversational context, not a
-        domain field any agent reasons over elsewhere) so replies stay
-        coherent across a few turns without unbounded growth."""
-        disruptions_this_week = len([
-            d for d in self.state.disruption_log
-            if d.direction == DisruptionDirection.LOSS
-        ])
-        result = run_aether_chat(
-            user_message=user_message,
-            goals=self.state.goals,
-            blueprint=self.state.blueprint,
-            lifeload=self.state.effective_lifeload,
-            disruptions_this_week=disruptions_this_week,
-            recent_history=self._chat_history,
-        )
-        self._chat_history.append({"role": "user", "content": user_message})
-        self._chat_history.append({"role": "aether", "content": result.reply})
-        self._chat_history = self._chat_history[-12:]
-        return result
-
     # ------------------------------------------------------------------
     # Entry 2 — Day Output
     # ------------------------------------------------------------------
@@ -307,7 +306,15 @@ class DoneHoOrchestrator:
         completed milestones on the Blueprint, accumulates this week's
         running totals for PRF (Entry 2), and flags whether Life Happened
         should be proactively offered (Entry 8 hook, >50% missed).
+
+        Real calendar guard: only one submission per real day is allowed
+        -- reopening the app later the same day, or refreshing the page,
+        no longer lets a second submission through for that same date.
         """
+        today = date.today().isoformat()
+        if self.state.last_day_submitted_date == today:
+            raise ValueError("Day already submitted today. Come back tomorrow.")
+
         if self.state.blueprint is None:
             raise ValueError("No committed blueprint yet -- nothing to check in against.")
 
@@ -332,6 +339,7 @@ class DoneHoOrchestrator:
             life_happened_suggested=result["should_offer_life_happened"],
         )
         self.state.daily_checkins.append(checkin)
+        self.state.last_day_submitted_date = today
 
         self.bus.publish(EVENT_DAY_OUTPUT_SUBMITTED, {"checkin": checkin, "result": result})
         return {

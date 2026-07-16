@@ -48,6 +48,7 @@ SESSIONS: dict[str, DoneHoOrchestrator] = {}
 def get_orchestrator(session_id: str) -> DoneHoOrchestrator:
     orchestrator = SESSIONS.get(session_id)
     if orchestrator is not None:
+        orchestrator.check_calendar_rollover()
         return orchestrator
 
     # Not in memory (server restarted?) — check Supabase before giving up
@@ -57,6 +58,7 @@ def get_orchestrator(session_id: str) -> DoneHoOrchestrator:
 
     orchestrator = DoneHoOrchestrator(profile=Profile.model_validate(saved_data["profile"]))
     restore_state(orchestrator, saved_data)
+    orchestrator.check_calendar_rollover()
     SESSIONS[session_id] = orchestrator
     return orchestrator
 

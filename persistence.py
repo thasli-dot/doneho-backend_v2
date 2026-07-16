@@ -73,6 +73,9 @@ def serialize_state(orchestrator: DoneHoOrchestrator) -> dict:
         "daily_checkins": _dump(s.daily_checkins),
         "day_output_totals": s.day_output_totals,
         "last_caregiving_hours": s.last_caregiving_hours,
+        "last_day_submitted_date": s.last_day_submitted_date,
+        "week_start_date": s.week_start_date,
+        # ReviewEngine — needed so PRF genuinely carries across weeks/restarts
         "review_history": _dump(review.history),
         "review_last_prf": getattr(review, "_last_prf", None),
     }
@@ -116,6 +119,10 @@ def restore_state(orchestrator: DoneHoOrchestrator, data: dict) -> None:
     s.daily_checkins = [DailyCheckIn.model_validate(d) for d in data["daily_checkins"]]
     s.day_output_totals = data["day_output_totals"]
     s.last_caregiving_hours = data["last_caregiving_hours"]
+    # .get() with a default, not data[...] -- sessions saved before this
+    # change won't have these keys yet, and that must not crash restore.
+    s.last_day_submitted_date = data.get("last_day_submitted_date")
+    s.week_start_date = data.get("week_start_date")
 
     review = orchestrator.deterministic_engine.review_engine
     review.history = [WeeklyPerformance.model_validate(w) for w in data["review_history"]]

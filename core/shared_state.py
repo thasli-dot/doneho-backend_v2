@@ -105,6 +105,14 @@ class SharedExecutionState:
         # record it without needing a fresh Pass 2 call at rollover time.
         self.last_caregiving_hours: float = 0.0
 
+        # --- Real calendar tracking (Supabase-backed, survives restarts).
+        # Replaces the old design where "day" and "week" only advanced
+        # because the frontend happened to reload -- these now check the
+        # actual current date. See orchestrator.check_calendar_rollover()
+        # and submit_day_output()'s same-day guard.
+        self.last_day_submitted_date: Optional[str] = None
+        self.week_start_date: Optional[str] = None
+
     def write(self, owner: str, field: str, value: Any) -> None:
         expected_owner = self._OWNERSHIP.get(field)
         if expected_owner is None:
@@ -160,4 +168,4 @@ class SharedExecutionState:
         self.write("DeterministicEngine", "lifeload", result["lifeload"])
         self.write("DeterministicEngine", "reserve_hours", result["reserve_hours"])
         self.write("DeterministicEngine", "planning_confidence", result["planning_confidence"])
-        self.write("DeterministicEngine", "commitment_contract", result["commitment"])
+        self.write("DeterministicEngine", "commitment_contract", result["commitment"]) 
