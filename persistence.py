@@ -20,7 +20,7 @@ from supabase import create_client
 from models.schemas import (
     Profile, Goal, Blueprint, ExecutionContract, DisruptionLog,
     RecalibrationProposal, FreeTimeSuggestionOutput, DailyCheckIn,
-    WeeklyPerformance,
+    WeeklyPerformance, SuggestionItem,
 )
 from orchestrator import DoneHoOrchestrator
 
@@ -66,7 +66,11 @@ def serialize_state(orchestrator: DoneHoOrchestrator) -> dict:
         "reserve_used_this_week": s.reserve_used_this_week,
         "lifeload_renegotiated_increase": s.lifeload_renegotiated_increase,
         "last_disruption_outcome": _dump(s.last_disruption_outcome),
-        "suggestions": s.suggestions,
+        "suggestions": {
+            "opportunity_map": _dump(s.suggestions["opportunity_map"]),
+            "day_boosters": _dump(s.suggestions["day_boosters"]),
+            "smart_spend": _dump(s.suggestions["smart_spend"]),
+        },
         "interaction_signals": s.interaction_signals,
         "last_gain_suggestions": _dump(s.last_gain_suggestions),
         "disruption_log": _dump(s.disruption_log),
@@ -109,7 +113,11 @@ def restore_state(orchestrator: DoneHoOrchestrator, data: dict) -> None:
         RecalibrationProposal.model_validate(data["last_disruption_outcome"])
         if data["last_disruption_outcome"] else None
     )
-    s.suggestions = data["suggestions"]
+    s.suggestions = {
+        "opportunity_map": [SuggestionItem.model_validate(x) for x in data["suggestions"]["opportunity_map"]],
+        "day_boosters": [SuggestionItem.model_validate(x) for x in data["suggestions"]["day_boosters"]],
+        "smart_spend": [SuggestionItem.model_validate(x) for x in data["suggestions"]["smart_spend"]],
+    }
     s.interaction_signals = data["interaction_signals"]
     s.last_gain_suggestions = (
         FreeTimeSuggestionOutput.model_validate(data["last_gain_suggestions"])
