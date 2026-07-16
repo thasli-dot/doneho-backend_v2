@@ -1,0 +1,138 @@
+[
+  {
+    "component": "Deterministic Engine",
+    "case": "Student, first week, light load",
+    "expected": "capacity>0, PRF in [0.10,1.0], reserve>=0, lifeload numeric",
+    "actual": "capacity=63.0h, PRF=0.600, reserve=18.1h, lifeload=48.8",
+    "passed": true,
+    "note": "all checks passed"
+  },
+  {
+    "component": "Deterministic Engine",
+    "case": "Nurse, caregiving 15h, first week",
+    "expected": "capacity>0, PRF in [0.10,1.0], reserve>=0, lifeload numeric",
+    "actual": "capacity=34.0h, PRF=0.450, reserve=15.6h, lifeload=44.2",
+    "passed": true,
+    "note": "all checks passed"
+  },
+  {
+    "component": "Deterministic Engine",
+    "case": "Freelancer/gig-style, ongoing week",
+    "expected": "capacity>0, PRF in [0.10,1.0], reserve>=0, lifeload numeric",
+    "actual": "capacity=61.0h, PRF=0.600, reserve=15.2h, lifeload=48.8",
+    "passed": true,
+    "note": "all checks passed"
+  },
+  {
+    "component": "Deterministic Engine",
+    "case": "Unemployed/job-seeking, heavy caregiving 25h (above 20h cap)",
+    "expected": "capacity>0, PRF in [0.10,1.0], reserve>=0, lifeload numeric",
+    "actual": "capacity=61.0h, PRF=0.400, reserve=28.1h, lifeload=44.2",
+    "passed": true,
+    "note": "all checks passed"
+  },
+  {
+    "component": "Deterministic Engine",
+    "case": "Business owner, planned event 10h",
+    "expected": "capacity>0, PRF in [0.10,1.0], reserve>=0, lifeload numeric",
+    "actual": "capacity=33.0h, PRF=0.600, reserve=8.2h, lifeload=48.8",
+    "passed": true,
+    "note": "all checks passed"
+  },
+  {
+    "component": "ReviewEngine (PRF)",
+    "case": "Caregiving penalty caps at 40h (>>20h saturation point)",
+    "expected": "penalty <= 0.2",
+    "actual": "actual penalty = 0.2",
+    "passed": true,
+    "note": "confirms cap holds even far past the 20h saturation point"
+  },
+  {
+    "component": "ReviewEngine (PRF formula)",
+    "case": "Good week: completion=0.85, reserve_usage=0.20 -> should get +0.05 bonus",
+    "expected": "PRF = 0.65",
+    "actual": "PRF = 0.65",
+    "passed": true,
+    "note": ""
+  },
+  {
+    "component": "ReviewEngine (PRF formula)",
+    "case": "Bad week: completion=0.40 -> should get -0.07 penalty",
+    "expected": "PRF = 0.53",
+    "actual": "PRF = 0.53",
+    "passed": true,
+    "note": ""
+  },
+  {
+    "component": "ReviewEngine (PRF formula)",
+    "case": "Bad week: reserve_usage=0.85 (over floor) even with ok completion -> penalty",
+    "expected": "PRF = 0.53",
+    "actual": "PRF = 0.53",
+    "passed": true,
+    "note": ""
+  },
+  {
+    "component": "ReviewEngine (PRF formula)",
+    "case": "Neutral week: completion=0.65, reserve_usage=0.50 -> nudge toward 0.5",
+    "expected": "PRF = 0.59",
+    "actual": "PRF = 0.59",
+    "passed": true,
+    "note": ""
+  },
+  {
+    "component": "ReviewEngine (PRF formula)",
+    "case": "Boundary: completion exactly 0.80, reserve exactly 0.30 -> bonus (>=, <=)",
+    "expected": "PRF = 0.65",
+    "actual": "PRF = 0.65",
+    "passed": true,
+    "note": ""
+  },
+  {
+    "component": "AbsorptionEngine (Stage 1)",
+    "case": "Small disruption (2h) well within reserve (5h) -> silent absorb",
+    "expected": "absorbs=True",
+    "actual": "absorbs=True",
+    "passed": true,
+    "note": "{\"absorbed_hours\": 2.0, \"remaining_reserve_after\": 3.0}"
+  },
+  {
+    "component": "AbsorptionEngine (Stage 1)",
+    "case": "Disruption (6h) exceeds reserve (5h) -> falls through to Stage 2",
+    "expected": "absorbs=False",
+    "actual": "absorbs=False",
+    "passed": true,
+    "note": "None (fell through)"
+  },
+  {
+    "component": "AbsorptionEngine (Stage 1)",
+    "case": "Disruption exactly equals reserve (5h == 5h) -> absorbs (boundary, <=)",
+    "expected": "absorbs=True",
+    "actual": "absorbs=True",
+    "passed": true,
+    "note": "{\"absorbed_hours\": 5.0, \"remaining_reserve_after\": 0.0}"
+  },
+  {
+    "component": "AbsorptionEngine (Stage 2)",
+    "case": "Shortfall (3h) fits within both caps -> proposal returned",
+    "expected": "covered=True",
+    "actual": "covered=True",
+    "passed": true,
+    "note": "{\"lifeload_increase_points\": 0.54, \"hours_unlocked\": 3.02, \"new_effective_lifeload\": 40.54}"
+  },
+  {
+    "component": "AbsorptionEngine (Stage 2)",
+    "case": "Shortfall (50h) exceeds any realistic cap -> None, falls to Stage 3",
+    "expected": "covered=False",
+    "actual": "covered=False",
+    "passed": true,
+    "note": "None (falls to Stage 3)"
+  },
+  {
+    "component": "AbsorptionEngine (Stage 2)",
+    "case": "Points cap already used up this week (9.5 of 10 used) -> tight headroom",
+    "expected": "informational",
+    "actual": "covered=True",
+    "passed": true,
+    "note": "covered=True, result={\"lifeload_increase_points\": 0.36, \"hours_unlocked\": 2.02, \"new_effective_lifeload\": 40.36}"
+  }
+]
