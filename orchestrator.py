@@ -16,7 +16,7 @@ from models.schemas import (
     Profile, Goal, Task, Blueprint, ExecutionContract, DisruptionLog,
     DisruptionDirection, GoalCategory, AbsorptionOutcome, RecalibrationProposal,
     RecoveryStep, DisruptionCostEstimate, WeeklyPerformance, AetherTipOutput,
-    DailyCheckIn,
+    DailyCheckIn, TaskPerformance,
 )
 from core.shared_state import SharedExecutionState
 from core.event_bus import (
@@ -108,7 +108,57 @@ class DoneHoOrchestrator:
             self.state.is_first_week = False
             self.state.week_number += 1
 
+            # Item 6 -- per-task completion, distinct from the blended
+            # whole-user PRF above. Computed from this week's
+            # daily_checkins, mapped back to task_id via the current
+            # Blueprint's milestones (title -> task_id lookup).
+            if self.state.blueprint is not None:
+                title_to_task = {
+                    m.title: (m.task_id, m.task_title)
+                    for m in self.state.blueprint.milestones
+                }
+                expected_by_task: dict[str, int] = {}
+                missed_by_task: dict[str, int] = {}
+                task_title_by_id: dict[str, str] = {}
+
+                for checkin in self.state.daily_checkins:
+                    for title in checkin.expected_milestone_titles:
+                        match = title_to_task.get(title)
+                        if match:
+                            task_id, task_title = match
+                            expected_by_task[task_id] = expected_by_task.get(task_id, 0) + 1
+                            task_title_by_id[task_id] = task_title
+                    for title in checkin.missed_milestone_titles:
+                        match = title_to_task.get(title)
+                        if match:
+                            task_id, _ = match
+                            missed_by_task[task_id] = missed_by_task.get(task_id, 0) + 1
+
+                for task_id, expected_count in expected_by_task.items():
+                    missed_count = missed_by_task.get(task_id, 0)
+                    self.state.task_performance_history.append(
+                        TaskPerformance(
+                            task_id=task_id,
+                            task_title=task_title_by_id[task_id],
+                            week_number=self.state.week_number,
+                            completion_rate=round(1 - (missed_count / expected_count), 4),
+                        )
+                    )
+
         self.state.reset_weekly_counters()
+
+    def get_task_performance_trend(self, task_id: str) -> list[TaskPerformance]:
+        """
+        All recorded weekly completion rates for one task, oldest first.
+        Empty list if the task has no recorded weeks yet (e.g. brand new,
+        or no week rollover has happened since it was added). Item 7
+        (long-term task pacing) will read this to decide whether to ease
+        or tighten next week's target for a given task.
+        """
+        return [
+            p for p in self.state.task_performance_history
+            if p.task_id == task_id
+        ]
 
     # ------------------------------------------------------------------
     # Wiring
@@ -140,9 +190,6 @@ class DoneHoOrchestrator:
         for g in self.state.goals:
             for t in g.tasks:
                 flag = flag_by_task_id.get(t.id)
-                if flag:
-                    t.task_type = flag.task_type
-                    t.duration_hint = flag.duration_hint
                 if flag and flag.is_ambiguous:
                     t.clarified = False
                     t.clarification_note = flag.question  # pending answer

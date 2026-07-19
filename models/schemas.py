@@ -67,7 +67,6 @@ class AbsorptionOutcome(str, Enum):
 # Profile / User
 # ---------------------------------------------------------------------------
 
-
 class Profile(BaseModel):
     name: str
     profession: str
@@ -189,6 +188,21 @@ class WeeklyPerformance(BaseModel):
     caregiving_hours: float = 0.0
 
 
+class TaskPerformance(BaseModel):
+    """
+    One week's completion record for a single task -- distinct from the
+    whole-user PRF above, which blends every task together. Lets DoneHo
+    tell "this specific task has been declining" from "the user overall
+    is fine." Computed at week rollover, same time as WeeklyPerformance,
+    from that week's daily_checkins mapped back to task_id via the
+    Blueprint's milestones.
+    """
+    task_id: str
+    task_title: str
+    week_number: int
+    completion_rate: float  # 0.0 - 1.0, this task's milestones only
+
+
 class DailyCheckIn(BaseModel):
     """
     Entry 2 — Day Output. One evening's record: which of that day's
@@ -209,7 +223,6 @@ class DailyCheckIn(BaseModel):
 # ---------------------------------------------------------------------------
 # Agent output schemas (ADK output_schema targets)
 # ---------------------------------------------------------------------------
-
 
 class ClarificationFlag(BaseModel):
     task_id: str

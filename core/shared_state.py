@@ -23,6 +23,7 @@ from typing import Any, Optional
 from models.schemas import (
     Profile, Goal, Blueprint, ExecutionContract, DisruptionLog,
     RecalibrationProposal, FreeTimeSuggestionOutput, DailyCheckIn,
+    TaskPerformance,
 )
 
 
@@ -113,6 +114,10 @@ class SharedExecutionState:
         self.last_day_submitted_date: Optional[str] = None
         self.week_start_date: Optional[str] = None
 
+        # --- Item 6: per-task performance, distinct from whole-user PRF.
+        # Computed at week rollover in orchestrator.start_new_week().
+        self.task_performance_history: list[TaskPerformance] = []
+
     def write(self, owner: str, field: str, value: Any) -> None:
         expected_owner = self._OWNERSHIP.get(field)
         if expected_owner is None:
@@ -168,4 +173,4 @@ class SharedExecutionState:
         self.write("DeterministicEngine", "lifeload", result["lifeload"])
         self.write("DeterministicEngine", "reserve_hours", result["reserve_hours"])
         self.write("DeterministicEngine", "planning_confidence", result["planning_confidence"])
-        self.write("DeterministicEngine", "commitment_contract", result["commitment"]) 
+        self.write("DeterministicEngine", "commitment_contract", result["commitment"])
