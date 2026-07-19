@@ -84,6 +84,10 @@ class Task(BaseModel):
     clarified: bool = False
     clarification_note: Optional[str] = None
     is_flexible: bool = True  # postponable vs. time-locked (Section 7, Item 1)
+    # Set by ClarificationAgent for every task (ambiguous or not) -- see
+    # ClarificationFlag in this same file for the full explanation.
+    task_type: Optional[str] = None
+    duration_hint: Optional[str] = None
 
 
 class Goal(BaseModel):
