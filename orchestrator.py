@@ -140,6 +140,9 @@ class DoneHoOrchestrator:
         for g in self.state.goals:
             for t in g.tasks:
                 flag = flag_by_task_id.get(t.id)
+                if flag:
+                    t.task_type = flag.task_type
+                    t.duration_hint = flag.duration_hint
                 if flag and flag.is_ambiguous:
                     t.clarified = False
                     t.clarification_note = flag.question  # pending answer

@@ -168,6 +168,8 @@ def _serialize_goal(goal: Goal) -> dict:
                 "clarified": t.clarified,
                 "clarification_note": t.clarification_note,
                 "is_flexible": t.is_flexible,
+                "task_type": t.task_type,
+                "duration_hint": t.duration_hint,
             }
             for t in goal.tasks
         ],
