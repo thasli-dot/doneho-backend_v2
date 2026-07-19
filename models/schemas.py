@@ -67,6 +67,7 @@ class AbsorptionOutcome(str, Enum):
 # Profile / User
 # ---------------------------------------------------------------------------
 
+
 class Profile(BaseModel):
     name: str
     profession: str
@@ -205,11 +206,26 @@ class DailyCheckIn(BaseModel):
 # Agent output schemas (ADK output_schema targets)
 # ---------------------------------------------------------------------------
 
+
 class ClarificationFlag(BaseModel):
     task_id: str
     task_title: str
     is_ambiguous: bool
     question: Optional[str] = None  # only present if is_ambiguous
+    # Forward-compatible fields for the future quick-select UI (not yet
+    # built -- the frontend can safely ignore these today, they don't
+    # break anything). Populated now so real reasoning exists to build
+    # that UI against later, instead of guessing blind.
+    task_type: Optional[str] = None
+    # "habit" (no fixed end, e.g. meditation) | "fixed_deadline" (real
+    # external date, e.g. an exam) | "vague_target" (needs a scope/level
+    # decision, e.g. "Learn Python") | "self_evident" (not ambiguous,
+    # duration is already clear or stated)
+    duration_hint: Optional[str] = None
+    # A short, human-readable estimate or note, e.g. "4-6 weeks for
+    # basics" or "~11 months until exam -- pacing still open". Not a
+    # guaranteed-accurate fact -- a reasoned starting estimate, same
+    # honesty standard as every other AI-generated number in this system.
 
 
 class ClarificationAgentOutput(BaseModel):
