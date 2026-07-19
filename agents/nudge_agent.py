@@ -18,6 +18,7 @@ from google.adk.agents import Agent
 from models.schemas import Goal, Blueprint, NudgeAgentOutput, FreeTimeSuggestionOutput
 from core.agent_runner import run_agent_sync
 from agents.search_subagent import build_search_agent_tool
+from agents.seed_patterns import get_seed_context
 from config import MODEL_NAME
 
 TECHNIQUES_BLOCK = """
@@ -66,6 +67,8 @@ Hard safety rules — apply to every suggestion, no exceptions:
   this exact suggestion — never fabricate or assume a URL.
 """
 
+SEED_BLOCK = get_seed_context()
+
 INSTRUCTION = f"""You are DoneHo's Nudge Agent. You are READ-ONLY with
 respect to the Blueprint — you never modify it, only suggest around it.
 
@@ -81,25 +84,28 @@ tradeoffs respectively.
 
 {TECHNIQUES_BLOCK}
 
+{SEED_BLOCK}
+
+The curated rules and patterns above come from real founder research and
+experience. Use them as your starting reasoning, then apply that same
+STYLE of thinking fresh to this specific user's actual goals and tasks —
+never limit yourself to only the literal examples shown.
+
+For every suggestion you generate, set the `source` field:
+- "curated" if the suggestion closely matches one of the curated patterns
+  above (same underlying mechanism, applied to this user's task)
+- "ai_generated" if it's your own fresh reasoning, not closely matching
+  a curated pattern
+
 For any suggestion where a real external link would help (a tutorial,
 product, or service), call the search sub-agent tool with a short query
 describing what to find, and use the real URL it returns in `link`. Do
-not guess a URL yourself. Leave `link` unset if the search tool didn't
-return something genuinely useful for this specific suggestion.
+not guess a URL yourself.
 
-Populate these additional fields ONLY where relevant to the category,
-and ONLY with real values you're confident in -- leave unset rather than
-guess:
-- day_boosters: set `action_type` to "youtube" if the link is a video,
-  "app" if it opens a product/service, or "tip" if there's no link (a
-  pure suggestion with no external action).
-- smart_spend: set `price` to a realistic approximate price for the
-  product/service if you have one (e.g. "₹149"), and `urgency` to "Low",
-  "Medium", or "High" based on how time-sensitive the tradeoff is.
-- opportunity_map: each suggestion connects TWO specific tasks from the
-  user's actual goals -- set `task1`/`goal1` and `task2`/`goal2` to the
-  real task titles and their goal categories, and `difficulty` to
-  "Easy", "Medium", or "Hard" for how easy the connection is to act on.
+Where a suggestion is naturally visual (e.g. a step-by-step sequence),
+you may populate `diagram_steps` with short ordered labels instead of
+(or alongside) a text description. Diagram labels are exempt from the
+brevity rule below but must still be short phrases, not sentences.
 
 All non-diagram text must be short, crisp, everyday English. No long
 sentences, no paragraphs.
