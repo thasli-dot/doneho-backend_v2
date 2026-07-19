@@ -153,7 +153,6 @@ class DayOutputRequest(BaseModel):
 # Response builders
 # ---------------------------------------------------------------------------
 
-
 def _serialize_goal(goal: Goal) -> dict:
     return {
         "id": goal.id,
@@ -168,8 +167,6 @@ def _serialize_goal(goal: Goal) -> dict:
                 "clarified": t.clarified,
                 "clarification_note": t.clarification_note,
                 "is_flexible": t.is_flexible,
-                "task_type": t.task_type,
-                "duration_hint": t.duration_hint,
             }
             for t in goal.tasks
         ],
@@ -499,7 +496,14 @@ def start_new_week(req: SessionOnlyRequest):
     orchestrator = get_orchestrator(req.session_id)
     orchestrator.start_new_week()
     save_session(req.session_id, orchestrator)
-    return {"status": "new week started", "is_first_week": orchestrator.state.is_first_week}
+    return {
+        "status": "new week started",
+        "is_first_week": orchestrator.state.is_first_week,
+        "task_performance_this_week": [
+            p.model_dump() for p in orchestrator.state.task_performance_history
+            if p.week_number == orchestrator.state.week_number
+        ],
+    }
 
 
 @app.get("/state")
