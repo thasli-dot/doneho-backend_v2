@@ -285,6 +285,10 @@ def submit_goals(req: SubmitGoalsRequest):
     try:
         orchestrator.submit_goals(goals)
     except Exception as e:
+        import traceback
+        print("=== /goals FULL TRACEBACK (temporary debug logging) ===")
+        traceback.print_exc()
+        print("=== END TRACEBACK ===")
         raise HTTPException(status_code=502, detail=f"Clarification Agent call failed: {e}")
 
     save_session(req.session_id, orchestrator)
@@ -301,6 +305,10 @@ def clarify(req: ClarifyRequest):
     try:
         orchestrator.answer_clarifications(req.answers)
     except Exception as e:
+        import traceback
+        print("=== /clarify FULL TRACEBACK (temporary debug logging) ===")
+        traceback.print_exc()
+        print("=== END TRACEBACK ===")
         raise HTTPException(status_code=502, detail=f"Blueprint Agent call failed: {e}")
     save_session(req.session_id, orchestrator)
     return {"blueprint": _serialize_blueprint(orchestrator.state.blueprint)}
@@ -332,6 +340,10 @@ def commit(req: SessionOnlyRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        import traceback
+        print("=== /commit FULL TRACEBACK (temporary debug logging) ===")
+        traceback.print_exc()
+        print("=== END TRACEBACK ===")
         raise HTTPException(status_code=502, detail=f"Nudge Agent call failed: {e}")
     save_session(req.session_id, orchestrator)
     return _dashboard_snapshot(orchestrator)
