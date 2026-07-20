@@ -149,6 +149,13 @@ class DayOutputRequest(BaseModel):
     unticked_indices: list[int] = []  # positions from GET /day-output/checklist the user unticked
 
 
+class InteractionRequest(BaseModel):
+    session_id: str
+    suggestion_type: str    # "opportunity_map" | "day_boosters" | "smart_spend"
+    suggestion_title: str
+    action: str              # "clicked" | "dismissed" | "completed"
+
+
 # ---------------------------------------------------------------------------
 # Response builders
 # ---------------------------------------------------------------------------
@@ -167,6 +174,8 @@ def _serialize_goal(goal: Goal) -> dict:
                 "clarified": t.clarified,
                 "clarification_note": t.clarification_note,
                 "is_flexible": t.is_flexible,
+                "task_type": t.task_type,
+                "duration_hint": t.duration_hint,
             }
             for t in goal.tasks
         ],
@@ -444,6 +453,18 @@ def submit_day_output(req: DayOutputRequest):
     return {**result, **_dashboard_snapshot(orchestrator)}
 
 
+@app.post("/interaction")
+def log_interaction(req: InteractionRequest):
+    """Item 8 -- raw capture of a real user interaction with a Nudge
+    suggestion (clicked/dismissed/completed). Not yet fed into any
+    aggregation or back into NudgeAgent's reasoning -- see
+    CHANGELOG_V2.md item 8, parts 2-3, for what's still unbuilt."""
+    orchestrator = get_orchestrator(req.session_id)
+    orchestrator.log_interaction(req.suggestion_type, req.suggestion_title, req.action)
+    save_session(req.session_id, orchestrator)
+    return {"status": "logged"}
+
+
 @app.post("/life-happened")
 def life_happened(req: SessionOnlyRequest):
     """Entry 8 -- no-reason-needed trigger. Only valid after at least one
@@ -503,6 +524,11 @@ def start_new_week(req: SessionOnlyRequest):
             p.model_dump() for p in orchestrator.state.task_performance_history
             if p.week_number == orchestrator.state.week_number
         ],
+        "long_term_tasks_carried_forward": orchestrator._last_carried_forward,
+        "long_term_tasks": {
+            task_id: tracker.model_dump()
+            for task_id, tracker in orchestrator.state.long_term_tasks.items()
+        },
     }
 
 

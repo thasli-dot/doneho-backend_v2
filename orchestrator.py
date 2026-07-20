@@ -10,13 +10,15 @@ events, not by hardcoding a call chain.
 """
 
 import uuid
-from datetime import date
+import re
+from datetime import date, datetime
+from typing import Optional
 
 from models.schemas import (
     Profile, Goal, Task, Blueprint, ExecutionContract, DisruptionLog,
     DisruptionDirection, GoalCategory, AbsorptionOutcome, RecalibrationProposal,
     RecoveryStep, DisruptionCostEstimate, WeeklyPerformance, AetherTipOutput,
-    DailyCheckIn, TaskPerformance,
+    DailyCheckIn, TaskPerformance, LongTermTaskState, CoverageEntry,
 )
 from core.shared_state import SharedExecutionState
 from core.event_bus import (
@@ -49,6 +51,7 @@ class DoneHoOrchestrator:
         self.day_output_engine = DayOutputEngine()
         self.recovery_applier = RecoveryApplier()
         self._last_nudge_output = None
+        self._last_carried_forward: list[str] = []  # item 7 -- set by start_new_week()
         self._register_subscriptions()
 
     def check_calendar_rollover(self) -> None:
@@ -145,6 +148,74 @@ class DoneHoOrchestrator:
                         )
                     )
 
+        # Item 7 -- long-term task coverage ledger + auto-continuation.
+        # Runs every rollover, regardless of whether there were any
+        # check-ins this week (a task should still carry forward even on
+        # a completely missed week -- that's exactly the situation it
+        # needs to survive).
+        carried_forward_titles: list[str] = []
+        for task_id, tracker in list(self.state.long_term_tasks.items()):
+            if not tracker.auto_continue or tracker.is_complete:
+                continue
+
+            # Log this week's milestones for this task into the running
+            # coverage ledger -- not a schedule, just a history, so a
+            # future Blueprint regeneration can avoid repeating ground.
+            if self.state.blueprint is not None:
+                for m in self.state.blueprint.milestones:
+                    if m.task_id == task_id:
+                        status = (
+                            "completed" if m.completed
+                            else "deferred" if m.deferred
+                            else "accepted_as_lost" if m.accepted_as_lost
+                            else "active"
+                        )
+                        tracker.coverage_ledger.append(
+                            CoverageEntry(
+                                week_number=self.state.week_number,
+                                title=m.title,
+                                status=status,
+                            )
+                        )
+
+            # Past its estimated target week -- stop auto-continuing.
+            # (Best-effort estimate from item 3b's duration_hint parsing;
+            # not a hard deadline enforcement, just a reasonable cutoff.)
+            if tracker.target_week_number is not None and self.state.week_number > tracker.target_week_number:
+                tracker.is_complete = True
+                continue
+
+            # Carry the task into the new week's goals if it isn't
+            # already there -- this is the actual "no re-entry needed"
+            # mechanism. The user still goes through Pass2/commit as
+            # normal for the new week; this just ensures the task itself
+            # doesn't need to be retyped.
+            already_present = any(
+                t.id == task_id for g in self.state.goals for t in g.tasks
+            )
+            if not already_present:
+                target_goal = next(
+                    (g for g in self.state.goals if g.id == tracker.goal_id), None
+                )
+                if target_goal is None:
+                    target_goal = Goal(
+                        id=tracker.goal_id,
+                        category=GoalCategory(tracker.goal_category),
+                        traffic=0.5,
+                        volatility=0.3,
+                    )
+                    self.state.goals.append(target_goal)
+                target_goal.tasks.append(Task(
+                    id=task_id,
+                    title=tracker.task_title,
+                    clarified=True,  # already clarified in a prior week
+                    is_flexible=True,
+                    task_type="fixed_deadline",
+                ))
+                carried_forward_titles.append(tracker.task_title)
+
+        self._last_carried_forward = carried_forward_titles  # exposed via API, see api.py
+
         self.state.reset_weekly_counters()
 
     def get_task_performance_trend(self, task_id: str) -> list[TaskPerformance]:
@@ -190,6 +261,25 @@ class DoneHoOrchestrator:
         for g in self.state.goals:
             for t in g.tasks:
                 flag = flag_by_task_id.get(t.id)
+                if flag:
+                    t.task_type = flag.task_type
+                    t.duration_hint = flag.duration_hint
+                    # Item 7 -- fixed-deadline tasks are the ones that
+                    # genuinely span multiple weeks (e.g. "Crack UPSC
+                    # 2027") and should auto-continue without re-entry.
+                    if flag.task_type == "fixed_deadline" and t.id not in self.state.long_term_tasks:
+                        weeks_remaining = _parse_weeks_remaining(flag.duration_hint)
+                        target_week = (
+                            self.state.week_number + weeks_remaining
+                            if weeks_remaining is not None else None
+                        )
+                        self.state.long_term_tasks[t.id] = LongTermTaskState(
+                            task_id=t.id,
+                            task_title=t.title,
+                            goal_id=g.id,
+                            goal_category=g.category.value,
+                            target_week_number=target_week,
+                        )
                 if flag and flag.is_ambiguous:
                     t.clarified = False
                     t.clarification_note = flag.question  # pending answer
@@ -612,12 +702,31 @@ class DoneHoOrchestrator:
 
         self.bus.publish(EVENT_RECALIBRATION_PROPOSED, {"proposal": proposal, "contract": contract, "auto_resolved": False})
 
+    def log_interaction(self, suggestion_type: str, suggestion_title: str, action: str) -> None:
+        """
+        Item 8 -- records a real user interaction with a Nudge suggestion
+        (clicked, dismissed, completed), so future weeks can learn what
+        kind of suggestions this user actually engages with. This is raw
+        capture only -- the aggregation step that turns this into
+        NudgeAgent-usable pattern data (e.g. "engages more with fitness
+        Smart Spend links than study ones") is not yet built; see
+        CHANGELOG_V2.md item 8, parts 2-3.
+        """
+        self.state.interaction_signals.append({
+            "suggestion_type": suggestion_type,   # "opportunity_map" | "day_boosters" | "smart_spend"
+            "suggestion_title": suggestion_title,
+            "action": action,                      # "clicked" | "dismissed" | "completed"
+            "timestamp": datetime.utcnow().isoformat(),
+        })
+
     def _log_disruption(self, description: str, cost_estimate, outcome: AbsorptionOutcome) -> None:
+        now = datetime.utcnow()
         self.state.disruption_log.append(DisruptionLog(
             description=description,
             direction=DisruptionDirection.LOSS,
             estimated_hours=cost_estimate.estimated_hours_lost,
-            day_of_week="unspecified",
+            day_of_week=now.strftime("%A"),
+            time_of_day=now.strftime("%H:00"),
             resolution_stage=outcome,
         ))
 
@@ -666,11 +775,13 @@ class DoneHoOrchestrator:
         gain_output = run_gain_suggestions(description, self.state.goals, self.state.blueprint)
         self.state.write("NudgeAgent", "last_gain_suggestions", gain_output)
 
+        now = datetime.utcnow()
         self.state.disruption_log.append(DisruptionLog(
             description=description,
             direction=DisruptionDirection.GAIN,
             estimated_hours=gain_output.estimated_free_hours,
-            day_of_week="unspecified",
+            day_of_week=now.strftime("%A"),
+            time_of_day=now.strftime("%H:00"),
             resolution_stage=None,  # gain path has no absorption stage
         ))
 
@@ -730,3 +841,21 @@ def new_goal_id() -> str:
 
 def new_task_id() -> str:
     return str(uuid.uuid4())[:8]
+
+
+def _parse_weeks_remaining(duration_hint: Optional[str]) -> Optional[int]:
+    """
+    Item 7 -- best-effort extraction of a weeks-remaining estimate from a
+    free-text duration_hint (e.g. "~11 months until exam"). Deliberately
+    simple: looks for a number next to "week"/"month" and converts.
+    Returns None if it can't confidently parse one -- callers must treat
+    that as "open-ended," never guess a number instead.
+    """
+    if not duration_hint:
+        return None
+    match = re.search(r"(\d+)\s*(week|month)", duration_hint, re.IGNORECASE)
+    if not match:
+        return None
+    count = int(match.group(1))
+    unit = match.group(2).lower()
+    return round(count * 4.33) if unit.startswith("month") else count

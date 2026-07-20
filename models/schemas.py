@@ -203,6 +203,34 @@ class TaskPerformance(BaseModel):
     completion_rate: float  # 0.0 - 1.0, this task's milestones only
 
 
+class CoverageEntry(BaseModel):
+    """One recorded milestone, kept as part of a long-term task's running
+    history -- what's been covered, and how it went. Not a schedule,
+    just a log, so a new week's Blueprint generation can avoid repeating
+    the same ground."""
+    week_number: int
+    title: str
+    status: str  # "completed" | "active" | "deferred" | "accepted_as_lost"
+
+
+class LongTermTaskState(BaseModel):
+    """
+    Item 7 -- tracking for a task that spans multiple weeks (e.g. "Crack
+    UPSC 2027"). Deliberately NOT a pre-built multi-week schedule -- only
+    a rolling record of what's been covered so far and whether the task
+    should auto-continue into the next week without the user re-entering
+    it. See CHANGELOG_V2.md item 7 for the full design reasoning.
+    """
+    task_id: str
+    task_title: str
+    goal_id: str
+    goal_category: str
+    auto_continue: bool = True  # user consent to carry this forward automatically
+    target_week_number: Optional[int] = None  # best-effort estimate from duration_hint; None = open-ended
+    is_complete: bool = False  # stops auto-continuation once true (done, or past its target week)
+    coverage_ledger: List[CoverageEntry] = []
+
+
 class DailyCheckIn(BaseModel):
     """
     Entry 2 — Day Output. One evening's record: which of that day's

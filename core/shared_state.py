@@ -1,5 +1,5 @@
 """
-SharedExecutionState — single source of truth object (Build Brief, Section 3.2).
+SharedExecutionState 	6 single source of truth object (Build Brief, Section 3.2).
 
 Critical rule: ONE WRITER PER FIELD. No two components may write to the
 same field. Ownership map:
@@ -8,7 +8,7 @@ same field. Ownership map:
     BlueprintAgent owns:      blueprint
     RecalibrationAgent owns:  execution_contract (only after a disruption)
     NudgeAgent owns:          interaction_signals, suggestions
-    (orchestrator owns:       profile, goals, disruption_log, week_number —
+    (orchestrator owns:       profile, goals, disruption_log, week_number 	6
      these are set once during onboarding / user input, not computed)
 
 This class enforces ownership at runtime: each field can only be written
@@ -23,7 +23,7 @@ from typing import Any, Optional
 from models.schemas import (
     Profile, Goal, Blueprint, ExecutionContract, DisruptionLog,
     RecalibrationProposal, FreeTimeSuggestionOutput, DailyCheckIn,
-    TaskPerformance,
+    TaskPerformance, LongTermTaskState,
 )
 
 
@@ -44,14 +44,14 @@ class SharedExecutionState:
         "execution_contract": "RecalibrationAgent",
         "suggestions": "NudgeAgent",
         "interaction_signals": "NudgeAgent",
-        # Entry 1 — staged silent absorption. NOTE: the *base* lifeload
+        # Entry 1 	6 staged silent absorption. NOTE: the *base* lifeload
         # value above stays DeterministicEngine-owned; these are a
         # separate running counter and delta, never a second writer to
         # the same field. See effective_lifeload property below.
         "reserve_used_this_week": "RecalibrationAgent",
         "lifeload_renegotiated_increase": "RecalibrationAgent",
         "last_disruption_outcome": "RecalibrationAgent",
-        # Entry 9 — positive disruption (gain) handling.
+        # Entry 9 	6 positive disruption (gain) handling.
         "last_gain_suggestions": "NudgeAgent",
     }
 
@@ -74,34 +74,34 @@ class SharedExecutionState:
 
         # RecalibrationAgent-owned
         self.execution_contract: Optional[ExecutionContract] = None
-        # Entry 1 — running counters for the current week. Reset via
+        # Entry 1 	6 running counters for the current week. Reset via
         # reset_weekly_counters() at week rollover (orchestrator lifecycle
-        # operation, not a component write — see method docstring).
+        # operation, not a component write 	6 see method docstring).
         self.reserve_used_this_week: float = 0.0
         self.lifeload_renegotiated_increase: float = 0.0
-        # Transient — the most recent disruption's resolution, whichever
+        # Transient 	6 the most recent disruption's resolution, whichever
         # stage handled it. UI reads this to know what to show/animate.
         self.last_disruption_outcome: Optional[RecalibrationProposal] = None
 
         # NudgeAgent-owned
         self.suggestions: dict = {"opportunity_map": [], "day_boosters": [], "smart_spend": []}
         self.interaction_signals: list[dict] = []
-        # Entry 9 — most recent gain-handling suggestions.
+        # Entry 9 	6 most recent gain-handling suggestions.
         self.last_gain_suggestions: Optional[FreeTimeSuggestionOutput] = None
 
         # Orchestrator-managed (set once from user input, not "computed")
         self.disruption_log: list[DisruptionLog] = []
-        # Entry 2 — Day Output. One entry per day submitted, aggregated
+        # Entry 2 	6 Day Output. One entry per day submitted, aggregated
         # into a WeeklyPerformance at week rollover (see orchestrator's
         # start_new_week). Orchestrator-managed, same as disruption_log.
         self.daily_checkins: list[DailyCheckIn] = []
 
-        # --- Entry 2 (Day Output) — orchestrator-managed, same category as
+        # --- Entry 2 (Day Output) 	6 orchestrator-managed, same category as
         # disruption_log: accumulated raw input over the week, not a value
         # any single engine/agent computes and owns. Reset at week rollover.
         self.day_output_totals: dict = {"total_checked": 0, "total_missed": 0}
 
-        # --- Entry 7 (per-user pattern learning) — last caregiving_hours
+        # --- Entry 7 (per-user pattern learning) 	6 last caregiving_hours
         # value seen via Pass 2, kept so week-end WeeklyPerformance can
         # record it without needing a fresh Pass 2 call at rollover time.
         self.last_caregiving_hours: float = 0.0
@@ -118,6 +118,10 @@ class SharedExecutionState:
         # Computed at week rollover in orchestrator.start_new_week().
         self.task_performance_history: list[TaskPerformance] = []
 
+        # --- Item 7: long-term task tracking (rolling, not a pre-built
+        # schedule). Keyed by task_id. See LongTermTaskState for details.
+        self.long_term_tasks: dict[str, LongTermTaskState] = {}
+
     def write(self, owner: str, field: str, value: Any) -> None:
         expected_owner = self._OWNERSHIP.get(field)
         if expected_owner is None:
@@ -133,7 +137,7 @@ class SharedExecutionState:
         """
         Base LifeLoad (DeterministicEngine-owned, computed from the active
         goal set) plus any Stage-2 renegotiated increase approved this
-        week. This is the number the Dashboard should display — never
+        week. This is the number the Dashboard should display 	6 never
         read `self.lifeload` alone once staged absorption is in play.
         """
         return round(self.lifeload + self.lifeload_renegotiated_increase, 2)
@@ -149,12 +153,12 @@ class SharedExecutionState:
         Week-rollover lifecycle operation, called by the orchestrator when
         a new week starts. This intentionally bypasses the write() gate:
         it isn't a component computing a value mid-week, it's the system
-        resetting state between weeks — a different kind of operation
+        resetting state between weeks 	6 a different kind of operation
         than the one-writer-per-field rule is protecting against.
 
         NOTE (Entry 2): the orchestrator must aggregate self.daily_checkins
         into a WeeklyPerformance and call review_engine.record_week_performance()
-        BEFORE calling this method — daily_checkins is cleared here as part
+        BEFORE calling this method 	6 daily_checkins is cleared here as part
         of the same rollover, and that data would otherwise be lost.
         """
         self.reserve_used_this_week = 0.0
@@ -166,11 +170,11 @@ class SharedExecutionState:
 
     def apply_deterministic_result(self, result: dict) -> None:
         """Convenience bulk-write used by the orchestrator right after
-        DeterministicEngine.run() — still routes through write() so
+        DeterministicEngine.run() 	6 still routes through write() so
         ownership is still enforced per field."""
         self.write("DeterministicEngine", "weekly_capacity", result["weekly_capacity"])
         self.write("DeterministicEngine", "prf", result["prf"])
         self.write("DeterministicEngine", "lifeload", result["lifeload"])
         self.write("DeterministicEngine", "reserve_hours", result["reserve_hours"])
         self.write("DeterministicEngine", "planning_confidence", result["planning_confidence"])
-        self.write("DeterministicEngine", "commitment_contract", result["commitment"])
+        self.write("DeterministicEngine", "commitment_contract", result["commitment_contract"])
