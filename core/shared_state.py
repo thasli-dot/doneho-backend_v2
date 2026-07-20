@@ -177,4 +177,4 @@ class SharedExecutionState:
         self.write("DeterministicEngine", "lifeload", result["lifeload"])
         self.write("DeterministicEngine", "reserve_hours", result["reserve_hours"])
         self.write("DeterministicEngine", "planning_confidence", result["planning_confidence"])
-        self.write("DeterministicEngine", "commitment_contract", result["commitment_contract"])
+        self.write("DeterministicEngine", "commitment_contract", result["commitment"])
