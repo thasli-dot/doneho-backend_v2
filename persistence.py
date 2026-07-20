@@ -1,4 +1,4 @@
-"""
+""" 
 persistence.py — Save and restore DoneHo session state to/from Supabase.
 
 This is intentionally a separate module, not a change to orchestrator.py
@@ -97,43 +97,56 @@ def restore_state(orchestrator: DoneHoOrchestrator, data: dict) -> None:
     write, same category as reset_weekly_counters()."""
     s = orchestrator.state
 
+    # Every field below uses .get() with a sensible default, not direct
+    # data["field"] access. This is a deliberate defensive fix: a
+    # KeyError was observed in production (item 7 testing) on
+    # 'commitment_contract' specifically, cause not fully confirmed
+    # (possibly multiple server workers/instances not sharing the
+    # in-memory SESSIONS cache, forcing frequent restores; possibly a
+    # save/restore race). Rather than leave the whole function fragile
+    # to any similarly missing key, every field restores safely now --
+    # a genuinely missing key falls back to a sensible default instead
+    # of crashing the whole session.
     s.profile = Profile.model_validate(data["profile"])
-    s.goals = [Goal.model_validate(g) for g in data["goals"]]
-    s.is_first_week = data["is_first_week"]
-    s.week_number = data["week_number"]
-    s.weekly_capacity = data["weekly_capacity"]
-    s.prf = data["prf"]
-    s.lifeload = data["lifeload"]
-    s.reserve_hours = data["reserve_hours"]
-    s.planning_confidence = data["planning_confidence"]
-    s.commitment_contract = data["commitment_contract"]
-    s.blueprint = Blueprint.model_validate(data["blueprint"]) if data["blueprint"] else None
+    s.goals = [Goal.model_validate(g) for g in data.get("goals", [])]
+    s.is_first_week = data.get("is_first_week", True)
+    s.week_number = data.get("week_number", 1)
+    s.weekly_capacity = data.get("weekly_capacity", 0.0)
+    s.prf = data.get("prf", 0.5)
+    s.lifeload = data.get("lifeload", 0.0)
+    s.reserve_hours = data.get("reserve_hours", 0.0)
+    s.planning_confidence = data.get("planning_confidence", 0.0)
+    s.commitment_contract = data.get("commitment_contract") or {}
+    blueprint_data = data.get("blueprint")
+    s.blueprint = Blueprint.model_validate(blueprint_data) if blueprint_data else None
+    execution_contract_data = data.get("execution_contract")
     s.execution_contract = (
-        ExecutionContract.model_validate(data["execution_contract"])
-        if data["execution_contract"] else None
+        ExecutionContract.model_validate(execution_contract_data)
+        if execution_contract_data else None
     )
-    s.reserve_used_this_week = data["reserve_used_this_week"]
-    s.lifeload_renegotiated_increase = data["lifeload_renegotiated_increase"]
+    s.reserve_used_this_week = data.get("reserve_used_this_week", 0.0)
+    s.lifeload_renegotiated_increase = data.get("lifeload_renegotiated_increase", 0.0)
+    last_disruption_data = data.get("last_disruption_outcome")
     s.last_disruption_outcome = (
-        RecalibrationProposal.model_validate(data["last_disruption_outcome"])
-        if data["last_disruption_outcome"] else None
+        RecalibrationProposal.model_validate(last_disruption_data)
+        if last_disruption_data else None
     )
+    suggestions_data = data.get("suggestions") or {}
     s.suggestions = {
-        "opportunity_map": [SuggestionItem.model_validate(x) for x in data["suggestions"]["opportunity_map"]],
-        "day_boosters": [SuggestionItem.model_validate(x) for x in data["suggestions"]["day_boosters"]],
-        "smart_spend": [SuggestionItem.model_validate(x) for x in data["suggestions"]["smart_spend"]],
+        "opportunity_map": [SuggestionItem.model_validate(x) for x in suggestions_data.get("opportunity_map", [])],
+        "day_boosters": [SuggestionItem.model_validate(x) for x in suggestions_data.get("day_boosters", [])],
+        "smart_spend": [SuggestionItem.model_validate(x) for x in suggestions_data.get("smart_spend", [])],
     }
-    s.interaction_signals = data["interaction_signals"]
+    s.interaction_signals = data.get("interaction_signals", [])
+    last_gain_data = data.get("last_gain_suggestions")
     s.last_gain_suggestions = (
-        FreeTimeSuggestionOutput.model_validate(data["last_gain_suggestions"])
-        if data["last_gain_suggestions"] else None
+        FreeTimeSuggestionOutput.model_validate(last_gain_data)
+        if last_gain_data else None
     )
-    s.disruption_log = [DisruptionLog.model_validate(d) for d in data["disruption_log"]]
-    s.daily_checkins = [DailyCheckIn.model_validate(d) for d in data["daily_checkins"]]
-    s.day_output_totals = data["day_output_totals"]
-    s.last_caregiving_hours = data["last_caregiving_hours"]
-    # .get() with a default, not data[...] -- sessions saved before this
-    # change won't have these keys yet, and that must not crash restore.
+    s.disruption_log = [DisruptionLog.model_validate(d) for d in data.get("disruption_log", [])]
+    s.daily_checkins = [DailyCheckIn.model_validate(d) for d in data.get("daily_checkins", [])]
+    s.day_output_totals = data.get("day_output_totals") or {"total_checked": 0, "total_missed": 0}
+    s.last_caregiving_hours = data.get("last_caregiving_hours", 0.0)
     s.last_day_submitted_date = data.get("last_day_submitted_date")
     s.week_start_date = data.get("week_start_date")
     s.task_performance_history = [
@@ -146,8 +159,8 @@ def restore_state(orchestrator: DoneHoOrchestrator, data: dict) -> None:
     }
 
     review = orchestrator.deterministic_engine.review_engine
-    review.history = [WeeklyPerformance.model_validate(w) for w in data["review_history"]]
-    if data["review_last_prf"] is not None:
+    review.history = [WeeklyPerformance.model_validate(w) for w in data.get("review_history", [])]
+    if data.get("review_last_prf") is not None:
         review._last_prf = data["review_last_prf"]
 
 
