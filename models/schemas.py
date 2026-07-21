@@ -67,6 +67,7 @@ class AbsorptionOutcome(str, Enum):
 # Profile / User
 # ---------------------------------------------------------------------------
 
+
 class Profile(BaseModel):
     name: str
     profession: str
@@ -231,6 +232,23 @@ class LongTermTaskState(BaseModel):
     coverage_ledger: List[CoverageEntry] = []
 
 
+class BehavioralPatternSummary(BaseModel):
+    """
+    Item 8 -- deterministic, counted summary of real behavioral signals
+    (disruption timing, suggestion engagement). Never AI-generated --
+    pure counting over real history, same Deterministic-Engine-vs-AI
+    split used everywhere else in DoneHo. Fed into NudgeAgent as grounded
+    context, same pattern as Stage 0's disruption-history grounding.
+    Empty/None fields mean "not enough real data yet to call it a
+    pattern" -- never filled with a guess.
+    """
+    week_number: int
+    top_disruption_times: List[str] = []  # e.g. ["Wednesday 16:00"], only if seen 2+ times
+    most_engaged_suggestion_type: Optional[str] = None  # only if 2+ real "clicked" signals
+    total_disruptions_analyzed: int = 0
+    total_interactions_analyzed: int = 0
+
+
 class DailyCheckIn(BaseModel):
     """
     Entry 2 — Day Output. One evening's record: which of that day's
@@ -251,6 +269,7 @@ class DailyCheckIn(BaseModel):
 # ---------------------------------------------------------------------------
 # Agent output schemas (ADK output_schema targets)
 # ---------------------------------------------------------------------------
+
 
 class ClarificationFlag(BaseModel):
     task_id: str

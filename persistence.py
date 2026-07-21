@@ -1,26 +1,10 @@
-""" 
-persistence.py — Save and restore DoneHo session state to/from Supabase.
-
-This is intentionally a separate module, not a change to orchestrator.py
-or shared_state.py. It knows how to turn a live DoneHoOrchestrator's state
-into plain JSON (for saving) and rebuild an equivalent orchestrator from
-that JSON (for restoring after a server restart).
-
-Only two things actually need persisting across a restart:
-  1. SharedExecutionState (all the fields listed in shared_state.py)
-  2. DeterministicEngine's ReviewEngine history + last PRF (so PRF genuinely
-     carries forward across weeks, not just within one server lifetime)
-
-AbsorptionEngine, DayOutputEngine, and RecoveryApplier hold no meaningful
-instance state (no __init__ overrides beyond the default) — they're
-recreated fresh every time, same as before.
-"""
 import os
 from supabase import create_client
 from models.schemas import (
     Profile, Goal, Blueprint, ExecutionContract, DisruptionLog,
     RecalibrationProposal, FreeTimeSuggestionOutput, DailyCheckIn,
     WeeklyPerformance, SuggestionItem, TaskPerformance, LongTermTaskState,
+    BehavioralPatternSummary,
 )
 from orchestrator import DoneHoOrchestrator
 
@@ -84,6 +68,7 @@ def serialize_state(orchestrator: DoneHoOrchestrator) -> dict:
             task_id: tracker.model_dump(mode="json")
             for task_id, tracker in s.long_term_tasks.items()
         },
+        "behavioral_pattern_history": _dump(s.behavioral_pattern_history),
         # ReviewEngine — needed so PRF genuinely carries across weeks/restarts
         "review_history": _dump(review.history),
         "review_last_prf": getattr(review, "_last_prf", None),
@@ -107,7 +92,7 @@ def restore_state(orchestrator: DoneHoOrchestrator, data: dict) -> None:
     # to any similarly missing key, every field restores safely now --
     # a genuinely missing key falls back to a sensible default instead
     # of crashing the whole session.
-    s.profile = Profile.model_validate(data["profile"])
+    s.profile = Profile.model_validate(data["profile"])  # profile is the one field genuinely required to exist
     s.goals = [Goal.model_validate(g) for g in data.get("goals", [])]
     s.is_first_week = data.get("is_first_week", True)
     s.week_number = data.get("week_number", 1)
@@ -157,6 +142,10 @@ def restore_state(orchestrator: DoneHoOrchestrator, data: dict) -> None:
         task_id: LongTermTaskState.model_validate(tracker_data)
         for task_id, tracker_data in data.get("long_term_tasks", {}).items()
     }
+    s.behavioral_pattern_history = [
+        BehavioralPatternSummary.model_validate(b)
+        for b in data.get("behavioral_pattern_history", [])
+    ]
 
     review = orchestrator.deterministic_engine.review_engine
     review.history = [WeeklyPerformance.model_validate(w) for w in data.get("review_history", [])]

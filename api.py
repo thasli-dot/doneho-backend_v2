@@ -541,6 +541,10 @@ def start_new_week(req: SessionOnlyRequest):
             task_id: tracker.model_dump()
             for task_id, tracker in orchestrator.state.long_term_tasks.items()
         },
+        "behavioral_pattern_this_week": (
+            orchestrator.state.behavioral_pattern_history[-1].model_dump()
+            if orchestrator.state.behavioral_pattern_history else None
+        ),
     }
 
 

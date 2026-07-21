@@ -23,7 +23,7 @@ from typing import Any, Optional
 from models.schemas import (
     Profile, Goal, Blueprint, ExecutionContract, DisruptionLog,
     RecalibrationProposal, FreeTimeSuggestionOutput, DailyCheckIn,
-    TaskPerformance, LongTermTaskState,
+    TaskPerformance, LongTermTaskState, BehavioralPatternSummary,
 )
 
 
@@ -122,6 +122,11 @@ class SharedExecutionState:
         # schedule). Keyed by task_id. See LongTermTaskState for details.
         self.long_term_tasks: dict[str, LongTermTaskState] = {}
 
+        # --- Item 8: behavioral pattern aggregation (disruption timing,
+        # suggestion engagement). Computed at week rollover; see
+        # orchestrator._compute_behavioral_patterns().
+        self.behavioral_pattern_history: list[BehavioralPatternSummary] = []
+
     def write(self, owner: str, field: str, value: Any) -> None:
         expected_owner = self._OWNERSHIP.get(field)
         if expected_owner is None:
@@ -177,4 +182,4 @@ class SharedExecutionState:
         self.write("DeterministicEngine", "lifeload", result["lifeload"])
         self.write("DeterministicEngine", "reserve_hours", result["reserve_hours"])
         self.write("DeterministicEngine", "planning_confidence", result["planning_confidence"])
-        self.write("DeterministicEngine", "commitment_contract", result["commitment"])
+        self.write("DeterministicEngine", "commitment_contract", result["commitment_contract"])
