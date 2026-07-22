@@ -201,6 +201,8 @@ def _serialize_blueprint(blueprint) -> Optional[dict]:
                 "completed": m.completed,
                 "deferred": m.deferred,
                 "accepted_as_lost": m.accepted_as_lost,
+                "quantity": m.quantity,
+                "unit": m.unit,
             }
             for m in blueprint.milestones
         ],
