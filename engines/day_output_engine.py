@@ -32,6 +32,23 @@ Item 9 (fuller version) additions:
 
 from config import LIFE_HAPPENED_MISS_RATIO_THRESHOLD
 
+# Item 9 -- Day Booster keyword matching. Boosters paraphrase a
+# milestone's wording rather than quoting it verbatim (e.g. a milestone
+# titled "Deep dive concept study for 15 challenging questions" gets
+# referenced as "...challenging concepts... from your 'Deep dive concept
+# study' list" -- overlapping significant words, not an exact substring
+# either direction). A small stopword list keeps short common words from
+# producing false-positive matches.
+_STOPWORDS = {
+    "the", "a", "an", "for", "of", "to", "and", "or", "in",
+    "on", "at", "your", "this", "that", "with", "from",
+}
+
+
+def _keywords(text: str) -> set:
+    words = "".join(c if c.isalnum() else " " for c in text.lower()).split()
+    return {w for w in words if len(w) > 2 and w not in _STOPWORDS and not w.isdigit()}
+
 # Bounded, deterministic pacing adjustment factors -- see build_snapshot.
 BEHIND_PACE_THRESHOLD = 0.7
 BEHIND_PACE_FACTOR = 1.15   # modest catch-up, never more than +15%
@@ -88,38 +105,26 @@ class DayOutputEngine:
                 today_target_quantity = max(1, round((m.quantity * trend_factor) / safe_days))
                 target_display = f"{today_target_quantity} of {int(m.quantity)} {m.unit} today"
 
-            # Day Booster linking -- keyword-overlap match, not an exact
-            # substring match. Boosters paraphrase a milestone's wording
-            # rather than quoting it verbatim (e.g. a milestone titled
-            # "Deep dive concept study for 15 challenging questions" gets
-            # referenced as "...challenging concepts... from your 'Deep
-            # dive concept study' list" -- overlapping significant words,
-            # not an exact substring either direction). A small, common
-            # stopword list is excluded so short common words don't
-            # produce false-positive matches.
-            _STOPWORDS = {
-                "the", "a", "an", "for", "of", "to", "and", "or", "in",
-                "on", "at", "your", "this", "that", "with", "from",
-            }
-
-            def _keywords(text: str) -> set:
-                words = "".join(c if c.isalnum() else " " for c in text.lower()).split()
-                return {w for w in words if len(w) > 2 and w not in _STOPWORDS and not w.isdigit()}
-
+            # Day Booster linking -- picks the BEST match (highest
+            # keyword overlap), not just the first one clearing the
+            # threshold. (Bug fix: a generic booster sharing 2 common
+            # words with a milestone could otherwise "win" over a far
+            # more specific booster sharing 6 words, purely because it
+            # happened to come first in the list -- verified live: "Deep
+            # dive concept study" shares "study"/"questions" with a
+            # generic UPSC booster, but shares 6 real words with the
+            # actually-relevant one.)
             boost_tip = None
+            best_overlap_count = 1  # require at least 2 to ever match at all
             milestone_keywords = _keywords(m.title)
             for b in day_boosters:
                 b_title = getattr(b, "title", None) or (b.get("title") if isinstance(b, dict) else None) or ""
                 b_desc = getattr(b, "description", None) or (b.get("description") if isinstance(b, dict) else None) or ""
                 booster_keywords = _keywords(f"{b_title} {b_desc}")
-                overlap = milestone_keywords & booster_keywords
-                # Require at least 2 real shared significant words -- a
-                # single shared common-ish word isn't enough evidence of
-                # a genuine reference, but 2+ specific words together is
-                # a real, honest signal.
-                if len(overlap) >= 2:
+                overlap_count = len(milestone_keywords & booster_keywords)
+                if overlap_count > best_overlap_count:
+                    best_overlap_count = overlap_count
                     boost_tip = {"title": b_title, "description": b_desc}
-                    break
 
             items.append({
                 "index": i,
