@@ -88,16 +88,36 @@ class DayOutputEngine:
                 today_target_quantity = max(1, round((m.quantity * trend_factor) / safe_days))
                 target_display = f"{today_target_quantity} of {int(m.quantity)} {m.unit} today"
 
-            # Day Booster linking -- simple, honest text match against
-            # this milestone's task_title. Not a guarantee of relevance,
-            # just a real, visible attempt at connecting the two systems
-            # rather than leaving them fully disconnected.
+            # Day Booster linking -- keyword-overlap match, not an exact
+            # substring match. Boosters paraphrase a milestone's wording
+            # rather than quoting it verbatim (e.g. a milestone titled
+            # "Deep dive concept study for 15 challenging questions" gets
+            # referenced as "...challenging concepts... from your 'Deep
+            # dive concept study' list" -- overlapping significant words,
+            # not an exact substring either direction). A small, common
+            # stopword list is excluded so short common words don't
+            # produce false-positive matches.
+            _STOPWORDS = {
+                "the", "a", "an", "for", "of", "to", "and", "or", "in",
+                "on", "at", "your", "this", "that", "with", "from",
+            }
+
+            def _keywords(text: str) -> set:
+                words = "".join(c if c.isalnum() else " " for c in text.lower()).split()
+                return {w for w in words if len(w) > 2 and w not in _STOPWORDS and not w.isdigit()}
+
             boost_tip = None
+            milestone_keywords = _keywords(m.title)
             for b in day_boosters:
                 b_title = getattr(b, "title", None) or (b.get("title") if isinstance(b, dict) else None) or ""
                 b_desc = getattr(b, "description", None) or (b.get("description") if isinstance(b, dict) else None) or ""
-                haystack = f"{b_title} {b_desc}".lower()
-                if m.task_title and m.task_title.lower() in haystack:
+                booster_keywords = _keywords(f"{b_title} {b_desc}")
+                overlap = milestone_keywords & booster_keywords
+                # Require at least 2 real shared significant words -- a
+                # single shared common-ish word isn't enough evidence of
+                # a genuine reference, but 2+ specific words together is
+                # a real, honest signal.
+                if len(overlap) >= 2:
                     boost_tip = {"title": b_title, "description": b_desc}
                     break
 
