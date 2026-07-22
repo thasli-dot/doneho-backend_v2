@@ -283,6 +283,7 @@ class DoneHoOrchestrator:
                 if flag:
                     t.task_type = flag.task_type
                     t.duration_hint = flag.duration_hint
+                    t.options = flag.options
                     # Item 7 -- fixed-deadline tasks are the ones that
                     # genuinely span multiple weeks (e.g. "Crack UPSC
                     # 2027") and should auto-continue without re-entry.

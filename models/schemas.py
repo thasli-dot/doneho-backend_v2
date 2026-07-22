@@ -67,7 +67,6 @@ class AbsorptionOutcome(str, Enum):
 # Profile / User
 # ---------------------------------------------------------------------------
 
-
 class Profile(BaseModel):
     name: str
     profession: str
@@ -88,6 +87,7 @@ class Task(BaseModel):
     # ClarificationFlag in this same file for the full explanation.
     task_type: Optional[str] = None
     duration_hint: Optional[str] = None
+    options: Optional[List[str]] = None  # item 4 -- quick-select choices, if any
 
 
 class Goal(BaseModel):
@@ -270,7 +270,6 @@ class DailyCheckIn(BaseModel):
 # Agent output schemas (ADK output_schema targets)
 # ---------------------------------------------------------------------------
 
-
 class ClarificationFlag(BaseModel):
     task_id: str
     task_title: str
@@ -290,6 +289,15 @@ class ClarificationFlag(BaseModel):
     # basics" or "~11 months until exam -- pacing still open". Not a
     # guaranteed-accurate fact -- a reasoned starting estimate, same
     # honesty standard as every other AI-generated number in this system.
+    options: Optional[List[str]] = None
+    # Item 4 -- quick-select choices, e.g. ["Just the basics (~4-6
+    # weeks)", "Solid enough for projects (~3 months)", "Job-ready (~6+
+    # months)"]. Populated only when the task genuinely reduces to 2-4
+    # clean anchor choices (mirrors item 3b's DURATION_REASONING_BLOCK
+    # reasoning) -- left null when an open answer is genuinely more
+    # honest than forcing a choice (e.g. some pacing questions). The
+    # frontend must always offer a free-text "something else" escape
+    # hatch alongside these, never present options as the only path.
 
 
 class ClarificationAgentOutput(BaseModel):

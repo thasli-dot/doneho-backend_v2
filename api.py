@@ -176,6 +176,7 @@ def _serialize_goal(goal: Goal) -> dict:
                 "is_flexible": t.is_flexible,
                 "task_type": t.task_type,
                 "duration_hint": t.duration_hint,
+                "options": t.options,
             }
             for t in goal.tasks
         ],
@@ -212,7 +213,12 @@ def _serialize_blueprint(blueprint) -> Optional[dict]:
 
 def _pending_clarifications(orchestrator: DoneHoOrchestrator) -> list[dict]:
     return [
-        {"task_id": t.id, "task_title": t.title, "question": t.clarification_note}
+        {
+            "task_id": t.id,
+            "task_title": t.title,
+            "question": t.clarification_note,
+            "options": t.options,
+        }
         for g in orchestrator.state.goals
         for t in g.tasks
         if not t.clarified

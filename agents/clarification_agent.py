@@ -63,6 +63,33 @@ Examples of the difference this makes:
 - "Grocery shopping for this month" -> SELF_EVIDENT -> no question.
 """
 
+QUICK_SELECT_BLOCK = """
+QUICK-SELECT OPTIONS (item 4 -- populate the `options` field when possible):
+
+When a question genuinely reduces to a small number of clean, sensible
+anchor choices (typically VAGUE_TARGET questions about skill/scope level),
+populate `options` with 2-4 short choice labels, each including the same
+real anchor estimate you'd have put in the question text -- e.g.:
+  options = [
+    "Just the basics (~4-6 weeks)",
+    "Solid enough for real projects (~3 months)",
+    "Job-ready (~6+ months)"
+  ]
+
+Leave `options` as null (not an empty list) when the honest answer space
+genuinely isn't a clean small set of choices -- most FIXED_DEADLINE pacing
+questions are like this (the real range of reasonable answers is closer
+to a spectrum than 2-4 discrete buckets); forcing options there would be
+less honest than an open question. When in doubt, prefer null over
+inventing artificial-feeling choices.
+
+The `question` field must ALWAYS still be set to a real, complete
+question even when `options` is also populated -- the frontend uses
+`question` as the header text above the choices, and always keeps a
+free-text fallback available regardless of whether options exist. Never
+treat options as replacing the need for a clear question.
+"""
+
 INSTRUCTION = f"""You are DoneHo's Clarification Agent.
 
 You will be given a list of user-entered tasks (each with an id and title).
@@ -89,6 +116,8 @@ Rules:
   appear exactly once in flags.
 
 {DURATION_REASONING_BLOCK}
+
+{QUICK_SELECT_BLOCK}
 
 For EVERY task (ambiguous or not), also set task_type and duration_hint
 per the reasoning above — these are used even when is_ambiguous is false,
