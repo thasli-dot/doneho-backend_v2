@@ -460,10 +460,33 @@ class DoneHoOrchestrator:
     # Entry 2 — Day Output
     # ------------------------------------------------------------------
     def get_day_output_checklist(self) -> list[dict]:
-        """Today's pre-ticked checklist -- every still-active milestone."""
+        """Today's pre-ticked checklist -- every still-active milestone,
+        each with a computed today_target_hours/today_target_quantity
+        (item 9), pacing-adjusted using item 6's real per-task trend,
+        and linked to a Day Booster suggestion when one genuinely
+        references that task."""
         if self.state.blueprint is None:
             return []
-        return self.day_output_engine.build_snapshot(self.state.blueprint)
+        days_remaining = 7
+        if self.state.week_start_date is not None:
+            elapsed = (date.today() - date.fromisoformat(self.state.week_start_date)).days
+            days_remaining = max(7 - elapsed, 1)
+
+        # Real per-task trend -- most recent recorded completion_rate per
+        # task_id appearing in this week's milestones. Tasks with no
+        # history yet simply get no adjustment (trend_factor stays 1.0).
+        task_ids = {m.task_id for m in self.state.blueprint.milestones}
+        task_trends = {}
+        for task_id in task_ids:
+            history = self.get_task_performance_trend(task_id)
+            if history:
+                task_trends[task_id] = history[-1].completion_rate
+
+        day_boosters = self.state.suggestions.get("day_boosters", [])
+
+        return self.day_output_engine.build_snapshot(
+            self.state.blueprint, days_remaining, task_trends, day_boosters
+        )
 
     def submit_day_output(self, day_label: str, unticked_indices: set[int]) -> dict:
         """

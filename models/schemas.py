@@ -113,6 +113,16 @@ class Milestone(BaseModel):
     completed: bool = False
     deferred: bool = False       # Stage 3 "extend_milestone_next_week"
     accepted_as_lost: bool = False  # Stage 3 "accepted as lost" (rigid task)
+    # --- Item 9 (fuller version) -- real countable daily quotas ---
+    # Set BY BlueprintAgent when a milestone naturally has a countable
+    # unit (e.g. "Solve 100 mock questions" -> quantity=100,
+    # unit="questions"). Left null when the milestone doesn't naturally
+    # reduce to a count (e.g. "Review notes") -- DayOutputEngine then
+    # falls back to the existing hours-based slice for those. Never
+    # guessed by DayOutputEngine itself; only BlueprintAgent (which
+    # actually wrote the milestone's real content) sets these.
+    quantity: Optional[float] = None
+    unit: Optional[str] = None
 
 
 class DiagramStep(BaseModel):

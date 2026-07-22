@@ -13,6 +13,11 @@ Hard rules enforced via instruction:
 - Every goal and every task gets at least one real milestone — never
   silently dropped, even Low-focus ones.
 - Output is short, checkable points, not descriptive sentences.
+
+Item 9 (fuller version) addition: quantity/unit fields, populated only
+when a milestone naturally has a real countable unit (e.g. "Solve 100
+mock questions"). This lets Day Output show a genuine "X of Y done today"
+target instead of only a time-based slice. See QUANTITY_UNIT_BLOCK below.
 """
 
 from google.adk.agents import Agent
@@ -20,7 +25,26 @@ from models.schemas import Goal, BlueprintAgentOutput
 from core.agent_runner import run_agent_sync
 from config import MODEL_NAME
 
-INSTRUCTION = """You are DoneHo's Blueprint Agent — the core weekly planner.
+QUANTITY_UNIT_BLOCK = """
+QUANTITY & UNIT (item 9 -- populate only when genuinely countable):
+
+For each milestone, ALSO set `quantity` and `unit` when the milestone
+naturally reduces to a real countable amount -- e.g.:
+- "Solve 100 mock polity questions" -> quantity=100, unit="questions"
+- "Read NCERT Class 11, chapters 1-4" -> quantity=4, unit="chapters"
+- "Complete 5 coding exercises" -> quantity=5, unit="exercises"
+
+Leave BOTH `quantity` and `unit` as null when the milestone genuinely
+doesn't reduce to a clean count -- e.g. "Review this week's notes",
+"Practice conversational speaking", "Set up development environment".
+Do NOT invent an artificial count for milestones like these; null is the
+honest answer, same principle as every other number in this system --
+calculated or genuinely counted, never guessed to fill a field.
+
+When in doubt, prefer null over a forced or approximate count.
+"""
+
+INSTRUCTION = f"""You are DoneHo's Blueprint Agent — the core weekly planner.
 
 You will be given, for each goal: its category, focus level (High/Medium/Low),
 its allocated hours for the week (already computed deterministically — do
@@ -45,6 +69,8 @@ Hard rules:
   allocated hours across all its milestones.
 - Fill goal_id, goal_title, task_id, task_title on every milestone exactly
   as given in the input — do not invent or alter IDs.
+
+{QUANTITY_UNIT_BLOCK}
 
 Return ONLY the structured output. No extra commentary."""
 
