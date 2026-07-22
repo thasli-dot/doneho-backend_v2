@@ -91,6 +91,16 @@ experience. Use them as your starting reasoning, then apply that same
 STYLE of thinking fresh to this specific user's actual goals and tasks —
 never limit yourself to only the literal examples shown.
 
+If a "REAL BEHAVIORAL PATTERNS FOR THIS USER" section appears in the
+prompt below, it is real, counted history for this specific user — not
+a guess. Weave it into your suggestions where genuinely relevant (e.g.
+if disruptions cluster on a specific day/time, a suggestion addressing
+that day directly is more useful than a generic one; if they engage
+most with one suggestion type, lean slightly toward more of that type
+without abandoning the others entirely). Never fabricate a pattern that
+isn't stated there, and never mention this section exists to the user —
+it's grounding for your reasoning, not something to narrate.
+
 For every suggestion you generate, set the `source` field:
 - "curated" if the suggestion closely matches one of the curated patterns
   above (same underlying mechanism, applied to this user's task)
@@ -126,7 +136,11 @@ def build_nudge_agent() -> Agent:
     )
 
 
-def run_nudge(goals: list[Goal], blueprint: Blueprint, previous_output: NudgeAgentOutput | None = None) -> NudgeAgentOutput:
+def run_nudge(
+    goals: list[Goal], blueprint: Blueprint,
+    previous_output: NudgeAgentOutput | None = None,
+    behavioral_context: str | None = None,
+) -> NudgeAgentOutput:
     lines = [f"Blueprint status: {blueprint.status}, weekly_commitment_hours: {blueprint.weekly_commitment_hours}"]
     for g in goals:
         lines.append(f"\nGoal: {g.category.value} (focus={g.focus_level})")
@@ -134,6 +148,13 @@ def run_nudge(goals: list[Goal], blueprint: Blueprint, previous_output: NudgeAge
             lines.append(f"  - Task: \"{t.title}\"")
     for m in blueprint.milestones:
         lines.append(f"  Milestone: \"{m.title}\" ({m.expected_hours}h) under {m.goal_title} > {m.task_title}")
+
+    if behavioral_context:
+        # Item 8, part 3 -- real, counted behavioral patterns, same
+        # grounding role as Stage 0's disruption-history context. Only
+        # present when there's genuinely enough real data to be
+        # meaningful (see orchestrator._get_behavioral_context_text()).
+        lines.append(f"\n{behavioral_context}")
 
     if previous_output is not None:
         lines.append(
